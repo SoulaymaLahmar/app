@@ -148,10 +148,17 @@ class SigninScreen extends StatelessWidget {
   }
 
   // sign in button onpressed
-  void _handleSignIn(){
-    final AuthController authController = Get.find<AuthController>();
-    authController.login();
-    Get.offAll(() => const MainScreen());
+  void _handleSignIn() {
+    final AuthController authController = Get.put(AuthController());
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isNotEmpty && password.isNotEmpty) {
+      authController.login(email, password);
+    } else {
+      Get.snackbar("Erreur", "Veuillez remplir tous les champs");
+    }
   }
+
 
 }

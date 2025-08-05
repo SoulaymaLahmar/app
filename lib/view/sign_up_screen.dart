@@ -7,6 +7,7 @@ import 'package:stage/utils/app_textstyles.dart';
 import 'package:stage/view/signin_screen.dart';
 import 'package:stage/view/widgets/custom_textfield.dart';
 
+import '../controllers/auth_controller.dart';
 import '../utils/app_textstyles.dart';
 import 'main_screen.dart';
 class SignUpScreen extends StatelessWidget {
@@ -16,6 +17,8 @@ class SignUpScreen extends StatelessWidget {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+  final AuthController authController = Get.put(AuthController());
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -135,8 +138,19 @@ class SignUpScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                      onPressed: ()=> Get.off(()=> const MainScreen()),
-                      style: ElevatedButton.styleFrom(
+                    onPressed: () {
+                      final name = _nameController.text.trim();
+                      final email = _emailController.text.trim();
+                      final password = _passwordController.text.trim();
+
+                      if (name.isNotEmpty && email.isNotEmpty && password.isNotEmpty) {
+                        authController.register(name, email, password);
+                      } else {
+                        Get.snackbar("Erreur", "Tous les champs sont requis");
+                      }
+                    },
+
+                    style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).primaryColor,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
