@@ -50,59 +50,68 @@ class AccountScreen extends StatelessWidget {
 
   Widget _buildProfileSection(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[850] : Colors.grey[100],
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          const CircleAvatar(
-            radius: 50,
-            backgroundImage: AssetImage('assets/images/account_img.jpg'),
+    return GetBuilder<AuthController>(
+      builder: (authController) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[850] : Colors.grey[100],
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Soulayma Lahmar',
-            style: AppTextStyle.withColor(
-              AppTextStyle.h2,
-              Theme.of(context).textTheme.bodyLarge!.color!,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'soulaymalahmar620@gmail.com',
-            style: AppTextStyle.withColor(
-              AppTextStyle.bodyMedium,
-              isDark ? Colors.grey[400]! : Colors.grey[600]!,
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton(
-              onPressed: () => Get.to(() => const EditProfileScreen()),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12,),
-              side: BorderSide(
-                color: isDark ? Colors.white70 : Colors.black12,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundImage: authController.user['profileImage'] != null
+                    ? NetworkImage(authController.user['profileImage'])
+                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
+
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-              child: Text(
-                  'Éditer le profil',
+
+              const SizedBox(height: 16),
+              Text(
+                authController.user['name'] ?? '',
                 style: AppTextStyle.withColor(
-                    AppTextStyle.buttonMedium,
-                    Theme.of(context).textTheme.bodyLarge!.color!,
+                  AppTextStyle.h2,
+                  Theme.of(context).textTheme.bodyLarge!.color!,
                 ),
               ),
+              const SizedBox(height: 4),
+              Text(
+                authController.user['email'] ?? '',
+                style: AppTextStyle.withColor(
+                  AppTextStyle.bodyMedium,
+                  isDark ? Colors.grey[400]! : Colors.grey[600]!,
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Get.to(() => const EditProfileScreen()),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  side: BorderSide(
+                    color: isDark ? Colors.white70 : Colors.black12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'Éditer le profil',
+                  style: AppTextStyle.withColor(
+                    AppTextStyle.buttonMedium,
+                    Theme.of(context).textTheme.bodyLarge!.color!,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
+
 
   Widget _buildMenuSection(BuildContext context ){
     final isDark = Theme.of(context).brightness == Brightness.dark;

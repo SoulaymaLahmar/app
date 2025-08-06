@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_core/src/get_main.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:stage/utils/app_textstyles.dart';
+
+import '../../../controllers/auth_controller.dart';
 
 class ProfileImage extends StatelessWidget {
   const ProfileImage({super.key});
@@ -9,6 +12,7 @@ class ProfileImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final userController = Get.find<AuthController>();
 
     return Center(
       child: Stack(
@@ -22,9 +26,12 @@ class ProfileImage extends StatelessWidget {
                 color: Theme.of(context).primaryColor,
                 width: 2,
               ),
-              image: const DecorationImage(
-                  image: AssetImage('assets/images/account_img.jpg'),
-                fit: BoxFit.cover,
+              image: DecorationImage(
+                image: userController.user['profileImage'] != null
+                    ? NetworkImage(userController.user['profileImage'])
+                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
+
+        fit: BoxFit.cover,
               ),
             ),
           ),
@@ -62,25 +69,18 @@ class ProfileImage extends StatelessWidget {
     );
   }
 
-  void _showImagePickerBottomSheet(BuildContext context, bool isDark ){
+  void _showImagePickerBottomSheet(BuildContext context, bool isDark) {
+    final userController = Get.find<AuthController>();
+
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
-           mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 40,
@@ -93,17 +93,17 @@ class ProfileImage extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'Changer la photo de profil',
-              style: AppTextStyle.withColor(
-                  AppTextStyle.h3,
-                  Theme.of(context).textTheme.bodyLarge!.color!,
-              ),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 24),
             _buildOptionTile(
               context,
               'Prendre une photo',
               Icons.camera_alt_outlined,
-              () => Get.back(),
+                  () {
+                Get.back();
+                userController.pickImage(source: ImageSource.camera);
+              },
               isDark,
             ),
             const SizedBox(height: 16),
@@ -111,7 +111,10 @@ class ProfileImage extends StatelessWidget {
               context,
               'Sélectionner depuis la galerie',
               Icons.photo_library_outlined,
-                  () => Get.back(),
+                  () {
+                Get.back();
+                userController.pickImage(source: ImageSource.gallery);
+              },
               isDark,
             ),
             const SizedBox(height: 16),
@@ -120,6 +123,7 @@ class ProfileImage extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildOptionTile(
       BuildContext context,
       String title,

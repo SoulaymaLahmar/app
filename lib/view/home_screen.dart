@@ -8,6 +8,8 @@ import 'package:stage/features/statistics/screens/statistics_screen.dart';
 import 'package:stage/features/notifications/view/notifications_screen.dart';
 import 'package:stage/view/widgets/custom_search_bar.dart';
 
+import '../controllers/auth_controller.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -37,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final String formattedMonth = DateFormat.yMMMM('fr_FR').format(selectedDate);
 
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -64,20 +67,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
+    final user = AuthController.to.user;
+    final imageUrl = user['profileImage'];
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 22,
-            backgroundImage: AssetImage('assets/images/account_img.jpg'),
+            backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                ? NetworkImage(imageUrl)
+                : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text('Tableau de bord', style: TextStyle(color: Colors.grey, fontSize: 15)),
-              Text('Soulayma', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(AuthController.to.user['name'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+
             ],
           ),
           const Spacer(),
