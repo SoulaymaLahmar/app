@@ -44,7 +44,7 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
     final vehicleImage = widget.vehicle['image'];
     final imageWidget = (vehicleImage != null && vehicleImage.toString().startsWith('http'))
         ? Image.network(vehicleImage, height: 180, fit: BoxFit.cover)
-        : Image.asset(vehicleImage ?? 'assets/images/Toyota_Corolla_1.8_VVT-i_Hybrid_Team_Deutschland_(XII)_–_f_03012021 (1).jpg', height: 180);
+        : Image.asset(vehicleImage ?? 'assets/images/d73af822e7ae484561635ad1550fd784.jpg', height: 180);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

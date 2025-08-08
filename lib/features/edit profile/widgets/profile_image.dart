@@ -31,7 +31,7 @@ class ProfileImage extends StatelessWidget {
                     ? NetworkImage(userController.user['profileImage'])
                     : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
 
-        fit: BoxFit.cover,
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -41,20 +41,20 @@ class ProfileImage extends StatelessWidget {
             child: GestureDetector(
               onTap: () => _showImagePickerBottomSheet(context, isDark),
               child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withOpacity(0.2)
-                          : Colors.grey.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDark
+                            ? Colors.black.withOpacity(0.2)
+                            : Colors.grey.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: const Icon(
                     Icons.camera_alt,
                     color: Colors.white,
@@ -141,7 +141,7 @@ class ProfileImage extends StatelessWidget {
           boxShadow: [
             BoxShadow(
               color: isDark ?
-                  Colors.black.withOpacity(0.2)
+              Colors.black.withOpacity(0.2)
                   : Colors.grey.withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),

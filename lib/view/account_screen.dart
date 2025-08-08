@@ -38,11 +38,11 @@ class AccountScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-          _buildProfileSection(context),
+            _buildProfileSection(context),
             const SizedBox(height: 24),
             _buildMenuSection(context),
 
-        ],
+          ],
         ),
       ),
     );
@@ -122,7 +122,7 @@ class AccountScreen extends StatelessWidget {
       {'icon': Icons.logout_outlined, 'title': 'Se déconnecter'},
     ];
     return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: menuItems.map((item){
           return Container(
@@ -133,7 +133,7 @@ class AccountScreen extends StatelessWidget {
               boxShadow: [
                 BoxShadow(
                   color: isDark ? Colors.black.withOpacity(0.2):
-                      Colors.grey.withOpacity(0.1),
+                  Colors.grey.withOpacity(0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -147,8 +147,8 @@ class AccountScreen extends StatelessWidget {
               title: Text(
                 item['title'] as String,
                 style: AppTextStyle.withColor(
-                    AppTextStyle.bodyMedium,
-                   Theme.of(context).textTheme.bodyLarge!.color!,
+                  AppTextStyle.bodyMedium,
+                  Theme.of(context).textTheme.bodyLarge!.color!,
                 ),
               ),
               trailing: Icon(
@@ -177,43 +177,43 @@ class AccountScreen extends StatelessWidget {
   void _showLogoutDialog(BuildContext context){
     final isDark = Theme.of(context).brightness == Brightness.dark;
     Get.dialog(
-      AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+        AlertDialog(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
 
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
-                shape: BoxShape.circle,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.logout_rounded,
+                  color: Theme.of(context).primaryColor,
+                  size: 32,
+                ),
               ),
-              child: Icon(
-                Icons.logout_rounded,
-                color: Theme.of(context).primaryColor,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Voulez-vous vraiment vous déconnecter',
-              style: AppTextStyle.withColor(
+              const SizedBox(height: 8),
+              Text(
+                'Voulez-vous vraiment vous déconnecter',
+                style: AppTextStyle.withColor(
                   AppTextStyle.bodyMedium,
                   isDark ? Colors.grey[400]! : Colors.grey[600]!,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
                     child: OutlinedButton(
-                        onPressed: () => Get.back(),
-                        style: OutlinedButton.styleFrom(
+                      onPressed: () => Get.back(),
+                      style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           side: BorderSide(
                             color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
@@ -222,55 +222,51 @@ class AccountScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           )
 
+                      ),
+                      child: Text(
+                        'Annuler',
+                        style: AppTextStyle.withColor(
+                          AppTextStyle.buttonMedium,
+                          Theme.of(context).textTheme.bodyLarge!.color!,
                         ),
-                        child: Text(
-                          'Annuler',
-                          style: AppTextStyle.withColor(
-                              AppTextStyle.buttonMedium,
-                              Theme.of(context).textTheme.bodyLarge!.color!,
-                          ),
-                        ),
-                    ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final AuthController authController = Get.find<AuthController>();
-                      authController.logout();
-                      Get.offAll(()=> SigninScreen());
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        )
-
-                    ),
-                    child: Text(
-                      'Se déconnecter',
-                      style: AppTextStyle.withColor(
-                        AppTextStyle.buttonMedium,
-                        Colors.white,
                       ),
                     ),
                   ),
-                ),
-              ],
-            )
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final AuthController authController = Get.find<AuthController>();
+                        authController.logout();
+                        Get.offAll(()=> SigninScreen());
+                      },
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).primaryColor,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          )
 
-          ],
-        ),
-      )
+                      ),
+                      child: Text(
+                        'Se déconnecter',
+                        style: AppTextStyle.withColor(
+                          AppTextStyle.buttonMedium,
+                          Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+
+            ],
+          ),
+        )
     );
   }
 
 
 
 }
-
-
-
-
