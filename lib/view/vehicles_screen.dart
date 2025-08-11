@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:stage/view/vehicle_details_screen.dart';
 import 'package:stage/view/widgets/custom_search_bar.dart';
 import '../utils/app_textstyles.dart';
@@ -9,63 +13,161 @@ class VehiclesScreen extends StatefulWidget {
 }
 
 class _VehiclesScreenState extends State<VehiclesScreen> {
-  List<Map<String, dynamic>> vehicles = [
-    {
-      'marque': 'Toyota',
-      'modele': 'Corolla',
-      'numeroSerie': 'ABC123456',
-      'date': '01/05/2021',
-      'etat': 'En service',
-      'type': 'Voiture',
-      'historique': [
-      ]
-    },
-    {
-      'marque': 'Renault',
-      'modele': 'Clio',
-      'numeroSerie': 'XYZ987654',
-      'date': '15/03/2022',
-      'etat': 'En maintenance',
-      'type': 'Voiture',
-      'historique': [
-        {'description': 'Révision complète', 'date': '2025-06-01 14:45'},
-      ]
-    },
-  ];
-
+  List<Map<String, dynamic>> vehicles = [];
   String searchQuery = '';
+  bool isLoading = true;
 
-  List<Map<String, dynamic>> get filteredVehicles {
-    return vehicles.where((v) {
-      final data = '${v['marque']} ${v['modele']} ${v['numeroSerie']}'.toLowerCase();
-      return data.contains(searchQuery.toLowerCase());
-    }).toList();
-  }
+  final baseUrl = 'http://10.0.2.2:5000/api/auth';
+  final String vehicleBaseUrl = 'http://10.0.2.2:5000/api/vehicles';
 
-  void _addVehicle(Map<String, dynamic> vehicle) {
-    setState(() {
-      vehicle['historique'] = [];
-      vehicles.add(vehicle);
+
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: 300), () {
+      _fetchVehicles();
     });
-    Navigator.of(context).pop();
   }
 
-  void _deleteVehicle(int index) {
-    setState(() => vehicles.removeAt(index));
-  }
+  Future<void> _fetchVehicles() async {
+    final box = GetStorage();
+    final token = box.read('token');
 
-  void _updateStatus(int index, String newStatus) {
-    setState(() => vehicles[index]['etat'] = newStatus);
-  }
-
-  void _addHistorique(int index, String description) {
-    setState(() {
-      vehicles[index]['historique'].add({
-        'description': description,
-        'date': DateTime.now().toString(),
+    if (token == null) {
+      debugPrint('Token introuvable, réessayez après connexion.');
+      setState(() {
+        isLoading = false;
       });
-    });
+      return;
+    }
+
+    try {
+      final res = await http.get(
+        Uri.parse(vehicleBaseUrl),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        final List data = json.decode(res.body);
+        setState(() {
+          vehicles = data.cast<Map<String, dynamic>>();
+          isLoading = false;
+        });
+        debugPrint('vehicles loaded: ${vehicles.length}');
+      } else if (res.statusCode == 401) {
+        debugPrint('Token expired or invalid');
+        // token expiration - redirect to login
+        setState(() {
+          isLoading = false;
+        });
+      } else {
+        debugPrint('Erreur récupération vehicules: ${res.statusCode} ${res.body}');
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Exception lors de la récupération des vehicules: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
+
+  void _addVehicle(Map<String, dynamic> vehicle) async {
+    final box = GetStorage();
+    final token = box.read('token');
+    final res = await http.post(
+      Uri.parse(vehicleBaseUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode(vehicle),
+    );
+
+    if (res.statusCode == 201) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Véhicule ajouté avec succès")),
+      );
+      await _fetchVehicles(); // Always reload from backend
+    } else {
+      debugPrint('Erreur ${res.statusCode}: ${res.body}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur lors de l'ajout du véhicule")),
+      );
+    }
+  }
+
+
+  Future<void> _deleteVehicle(int index) async {
+    final box = GetStorage();
+    final token = box.read('token');
+    final vehicleId = vehicles[index]['_id'];
+
+    try {
+      final res = await http.delete(
+        Uri.parse('$vehicleBaseUrl/$vehicleId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        setState(() {
+          vehicles.removeAt(index);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Véhicule supprimé avec succès')),
+        );
+      } else {
+        debugPrint('Erreur suppression: ${res.statusCode} ${res.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la suppression du véhicule')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Exception suppression véhicule: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur réseau lors de la suppression')),
+      );
+    }
+  }
+
+  Future<void> _updateStatus(int index, String newStatus) async {
+    final box = GetStorage();
+    final token = box.read('token');
+    final vehicleId = vehicles[index]['_id'];
+
+    try {
+      final res = await http.patch(
+        Uri.parse('$vehicleBaseUrl/$vehicleId/status'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'etat': newStatus}),
+      );
+
+      if (res.statusCode == 200) {
+        setState(() {
+          vehicles[index]['etat'] = newStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('État mis à jour')),
+        );
+      } else {
+        debugPrint('Erreur mise à jour état: ${res.statusCode} ${res.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la mise à jour de l\'état')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Exception mise à jour état: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur réseau lors de la mise à jour de l\'état')),
+      );
+    }
+  }
+
 
   void _showStatusDialog(int index) {
     showDialog(
@@ -82,44 +184,20 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
               child: Text(status),
             ))
                 .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                _updateStatus(index, value);
-                Navigator.of(context).pop();
-              }
+            onChanged: (value) async {
+            if (value != null) {
+            await _updateStatus(index, value);
+            Navigator.of(context).pop();
+            }
             },
+
           ),
         );
       },
     );
   }
 
-  void _showHistoriqueDialog(int index) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        TextEditingController controller = TextEditingController();
-        return AlertDialog(
-          title: Text('Ajouter une réparation / entretien'),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(hintText: 'Description'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (controller.text.isNotEmpty) {
-                  _addHistorique(index, controller.text);
-                }
-                Navigator.of(context).pop();
-              },
-              child: Text('Ajouter'),
-            )
-          ],
-        );
-      },
-    );
-  }
+
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -147,83 +225,139 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Gestion des Chauffeurs',
+            style: AppTextStyle.withColor(
+              AppTextStyle.h3,
+              isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+
+    }
+
+    final filteredVehicles = vehicles.where((vehicle) {
+      final data = '${vehicle['marque']} ${vehicle['modele']} ${vehicle['numeroSerie']}'.toLowerCase();
+      return data.contains(searchQuery.toLowerCase());
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Gestion des Véhicules',
+          'Gestion des Chauffeurs',
           style: AppTextStyle.withColor(
             AppTextStyle.h3,
             isDark ? Colors.white : Colors.black,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {
+                isLoading = true;
+              });
+              _fetchVehicles();
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
           CustomSearchBar(
-            onChanged: (value) {
-              setState(() => searchQuery = value);
-            },
+            onChanged: (value) => setState(() => searchQuery = value),
           ),
+          if (vehicles.isEmpty)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.directions_car,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Aucun véhicule trouvé',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Appuyez sur + pour ajouter un véhicule',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
           Expanded(
-            child: ListView.builder(
-              itemCount: filteredVehicles.length,
-              itemBuilder: (context, index) {
-                var vehicle = filteredVehicles[index];
-                return Card(
-                  child: ListTile(
-                    leading: Icon(Icons.directions_car),
-                    title: Text('${vehicle['marque']} ${vehicle['modele']}'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('N° Série: ${vehicle['numeroSerie']}'),
-                        Text('Date: ${vehicle['date']}'),
-                        Row(
-                          children: [
-                            Text('État: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(
-                              vehicle['etat'],
-                              style: TextStyle(color: _getStatusColor(vehicle['etat'])),
-                            ),
-                          ],
-                        ),
-                        if (vehicle['historique'].isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: vehicle['historique'].map<Widget>((entry) =>
-                                  Text("- ${entry['date'].toString().substring(0, 16)}: ${entry['description']}")).toList(),
-                            ),
+            child: RefreshIndicator(
+              onRefresh: _fetchVehicles,
+              child: ListView.builder(
+                itemCount: filteredVehicles.length,
+                itemBuilder: (context, index) {
+                  var vehicle = filteredVehicles[index];
+                  return Card(
+                    child: ListTile(
+                      leading: Icon(Icons.directions_car),
+                      title: Text('${vehicle['marque']} ${vehicle['modele']}'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('N° Série: ${vehicle['numeroSerie']}'),
+                          Text('Date: ${vehicle['type']}'),
+                          Row(
+                            children: [
+                              Text('État: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(
+                                vehicle['etat'],
+                                style: TextStyle(color: _getStatusColor(vehicle['etat'])),
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        final realIndex = vehicles.indexOf(vehicle);
-                        if (value == 'delete') _deleteVehicle(realIndex);
-                        if (value == 'update_status') _showStatusDialog(realIndex);
-                        if (value == 'add_historique') _showHistoriqueDialog(realIndex);
+                        ],
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          final realIndex = vehicles.indexOf(vehicle);
+                          if (value == 'delete') _deleteVehicle(realIndex);
+                          if (value == 'update_status') _showStatusDialog(realIndex);
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(value: 'update_status', child: Text('Modifier l\'état')),
+                          PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                        ],
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VehicleDetailsScreen(vehicle: vehicle),
+                          ),
+                        );
                       },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(value: 'update_status', child: Text('Modifier l\'état')),
-                        PopupMenuItem(value: 'add_historique', child: Text('Ajouter historique')),
-                        PopupMenuItem(value: 'delete', child: Text('Supprimer')),
-                      ],
                     ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VehicleDetailsScreen(vehicle: vehicle),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+              )
           ),
         ],
       ),
@@ -257,23 +391,32 @@ class _AddVehicleFormState extends State<AddVehicleForm> {
   String carburant = 'Essence';
   String consommation = '';
   String? imageUrl;
+  bool isSubmitting = false;
 
   void _submit() {
-    if (_formKey.currentState!.validate() && dateAcquisition != null) {
+    if (_formKey.currentState!.validate() && !isSubmitting) {
       _formKey.currentState!.save();
+      setState(() {
+        isSubmitting = true;
+      });
       widget.onSubmit({
-        'marque': marque,
-        'modele': modele,
-        'numeroSerie': numeroSerie,
+        'marque': marque.trim(),
+        'modele': modele.trim(),
+        'numeroSerie': numeroSerie.trim(),
         'date':
         "${dateAcquisition!.day}/${dateAcquisition!.month}/${dateAcquisition!.year}",
         'etat': etat,
         'type': type,
-        'kilometrage': kilometrage,
-        'carburant': carburant,
-        'consommation': consommation,
+        'kilometrage': kilometrage.trim(),
+        'carburant': carburant.trim(),
+        'consommation': consommation.trim(),
         'image': imageUrl,
       });
+
+      setState(() {
+        isSubmitting = false;
+      });
+
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Veuillez remplir tous les champs.")),
@@ -293,65 +436,74 @@ class _AddVehicleFormState extends State<AddVehicleForm> {
             children: [
               Text("Ajouter un véhicule",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(labelText: 'Marque'),
+                decoration: InputDecoration(labelText: 'Marque', border: OutlineInputBorder(),),
                 validator: (value) =>
                 value!.isEmpty ? 'Champ requis' : null,
                 onSaved: (value) => marque = value!,
               ),
+              const SizedBox(height: 10),
               TextFormField(
-                decoration: InputDecoration(labelText: 'Modèle'),
+                decoration: InputDecoration(labelText: 'Modèle', border: OutlineInputBorder()),
                 validator: (value) =>
                 value!.isEmpty ? 'Champ requis' : null,
                 onSaved: (value) => modele = value!,
               ),
+              const SizedBox(height: 10),
               TextFormField(
-                decoration: InputDecoration(labelText: 'Numéro de série'),
+                decoration: InputDecoration(labelText: 'Numéro de série', border: OutlineInputBorder()),
                 validator: (value) =>
                 value!.isEmpty ? 'Champ requis' : null,
                 onSaved: (value) => numeroSerie = value!,
               ),
+              const SizedBox(height: 10),
               TextFormField(
-                decoration: InputDecoration(labelText: 'Kilométrage (km)'),
+                decoration: InputDecoration(labelText: 'Kilométrage (km)', border: OutlineInputBorder()),
                 keyboardType: TextInputType.number,
                 validator: (value) =>
                 value!.isEmpty ? 'Champ requis' : null,
                 onSaved: (value) => kilometrage = value!,
               ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: "Type de carburant"),
+                decoration: InputDecoration(labelText: "Type de carburant", border: OutlineInputBorder()),
                 value: carburant,
                 items: ['Essence', 'Diesel', 'Électrique', 'Hybride']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (value) => setState(() => carburant = value!),
               ),
+              const SizedBox(height: 10),
               TextFormField(
-                decoration: InputDecoration(labelText: 'Consommation (L/100km)'),
+                decoration: InputDecoration(labelText: 'Consommation (L/100km)', border: OutlineInputBorder()),
                 keyboardType: TextInputType.number,
                 validator: (value) =>
                 value!.isEmpty ? 'Champ requis' : null,
                 onSaved: (value) => consommation = value!,
               ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: "État"),
+                decoration: InputDecoration(labelText: "État", border: OutlineInputBorder()),
                 value: etat,
                 items: ['En service', 'En maintenance', 'Hors service']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (value) => setState(() => etat = value!),
               ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: "Type de véhicule"),
+                decoration: InputDecoration(labelText: "Type de véhicule", border: OutlineInputBorder()),
                 value: type,
                 items: ['Voiture', 'Camion', 'Moto']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (value) => setState(() => type = value!),
               ),
+              const SizedBox(height: 10),
               TextFormField(
                 decoration:
-                InputDecoration(labelText: 'Lien de l\'image (optionnel)'),
+                InputDecoration(labelText: 'Lien de l\'image (optionnel)', border: OutlineInputBorder()),
                 keyboardType: TextInputType.url,
                 onSaved: (value) =>
                 imageUrl = value?.isNotEmpty == true ? value : null,
@@ -381,9 +533,28 @@ class _AddVehicleFormState extends State<AddVehicleForm> {
                 ],
               ),
               SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: _submit,
-                child: Text('Ajouter'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text("Annuler"),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: isSubmitting ? null : _submit,
+                      child: isSubmitting
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : const Text("Ajouter"),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

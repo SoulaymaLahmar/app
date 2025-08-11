@@ -63,7 +63,7 @@ class _DriversScreenState extends State<DriversScreen> {
         debugPrint('Drivers loaded: ${drivers.length}');
       } else if (res.statusCode == 401) {
         debugPrint('Token expired or invalid');
-        // Handle token expiration - redirect to login
+        // token expiration - redirect to login
         setState(() {
           isLoading = false;
         });
@@ -129,17 +129,10 @@ class _DriversScreenState extends State<DriversScreen> {
     }
   }
 
-  Future<void> _deleteDriver(String driverId) async {
+  Future<void> _deleteDriver(int index) async {
     final box = GetStorage();
     final token = box.read('token');
-
-
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Veuillez vous reconnecter")),
-      );
-      return;
-    }
+    final driverId = drivers[index]['_id'];
 
     try {
       final res = await http.delete(
@@ -149,23 +142,103 @@ class _DriversScreenState extends State<DriversScreen> {
 
       if (res.statusCode == 200) {
         setState(() {
-          drivers.removeWhere((d) => d['_id'] == driverId);
+          drivers.removeAt(index);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Chauffeur supprimé")),
+          SnackBar(content: Text('chauffeur supprimé avec succès')),
         );
       } else {
+        debugPrint('Erreur suppression: ${res.statusCode} ${res.body}');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur suppression: ${res.body}")),
+          SnackBar(content: Text('Erreur lors de la suppression du chauffeur')),
         );
       }
     } catch (e) {
-      debugPrint('Erreur suppression chauffeur: $e');
+      debugPrint('Exception suppression chauffeur: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erreur lors de la suppression")),
+        SnackBar(content: Text('Erreur réseau lors de la suppression')),
       );
     }
   }
+
+  Future<void> _updateStatus(int index, String newStatus) async {
+    final box = GetStorage();
+    final token = box.read('token');
+    final driverId = drivers[index]['_id'];
+
+    try {
+      final res = await http.patch(
+        Uri.parse('$driverBaseUrl/$driverId/status'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'statut': newStatus}),
+      );
+
+      if (res.statusCode == 200) {
+        setState(() {
+          drivers[index]['statut'] = newStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('État mis à jour')),
+        );
+      } else {
+        debugPrint('Erreur mise à jour état: ${res.statusCode} ${res.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la mise à jour de l\'état')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Exception mise à jour état: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur réseau lors de la mise à jour de l\'état')),
+      );
+    }
+  }
+
+
+  void _showStatusDialog(int index) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String selectedStatus = drivers[index]['statut'];
+        return AlertDialog(
+          title: Text('Modifier l\'état'),
+          content: DropdownButton<String>(
+            value: selectedStatus,
+            items: ['Disponible', 'Occupé', 'Inactif']
+                .map((status) => DropdownMenuItem(
+              value: status,
+              child: Text(status),
+            ))
+                .toList(),
+            onChanged: (value) async {
+              if (value != null) {
+                await _updateStatus(index, value);
+                Navigator.of(context).pop();
+              }
+            },
+
+          ),
+        );
+      },
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Disponible':
+        return Colors.green;
+      case 'Occupé':
+        return Colors.orange;
+      case 'Inactif':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
 
 
   void _openAddDriverForm() {
@@ -196,7 +269,6 @@ class _DriversScreenState extends State<DriversScreen> {
 
     if (photo != null && photo.isNotEmpty) {
       try {
-        // If it's a file path
         if (photo.startsWith('/') || photo.startsWith('C:\\')) {
           final file = File(photo);
           if (file.existsSync()) {
@@ -331,35 +403,6 @@ class _DriversScreenState extends State<DriversScreen> {
                           icon: Icons.phone,
                           label: 'Appeler',
                         ),
-                        SlidableAction(
-                          onPressed: (context) {
-                            showDialog(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text("Supprimer chauffeur"),
-                                content: const Text("Voulez-vous vraiment supprimer ce chauffeur ?"),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text("Annuler"),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      _deleteDriver(driver['_id']);
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                    child: const Text("Supprimer"),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          icon: Icons.delete,
-                          label: 'Supprimer',
-                        ),
                       ],
                     ),
                     child: Card(
@@ -367,22 +410,32 @@ class _DriversScreenState extends State<DriversScreen> {
                       child: ListTile(
                         leading: _buildDriverPhoto(driver),
                         title: Text("${driver['nom']} ${driver['prenom']}"),
-                        subtitle: Text(
-                            "Permis: ${driver['permis']}\nTéléphone: ${driver['telephone']}"
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _statusColor(driver['statut']).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            driver['statut'],
-                            style: TextStyle(
-                              color: _statusColor(driver['statut']),
-                              fontWeight: FontWeight.bold,
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Permis: ${driver['permis']}'),
+                            Text('Télephone: ${driver['telephone']}'),
+                            Row(
+                              children: [
+                                Text('Statut: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  driver['statut'],
+                                  style: TextStyle(color: _getStatusColor(driver['statut'])),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) {
+                            final realIndex = drivers.indexOf(driver);
+                            if (value == 'delete') _deleteDriver(realIndex);
+                            if (value == 'update_status') _showStatusDialog(realIndex);
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(value: 'update_status', child: Text('Modifier le statut')),
+                            PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                          ],
                         ),
                       ),
                     ),
