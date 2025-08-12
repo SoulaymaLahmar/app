@@ -1,4 +1,4 @@
-// Updated VehicleDetailsScreen with proper historique and backend delete
+// Updated VehicleDetailsScreen with proper date-based entretien handling
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -150,10 +150,8 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
       String statut;
       if (entretienDate.isBefore(today)) {
         statut = 'termine'; // Past date = completed (historique)
-      } else if (entretienDate.isAtSameMomentAs(today)) {
-        statut = 'en_cours'; // Today = in progress
       } else {
-        statut = 'planifie'; // Future date = planned (prochains entretiens)
+        statut = 'planifie'; // Future date or today = planned (prochains entretiens)
       }
 
       final body = {
@@ -172,30 +170,24 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
         body: jsonEncode(body),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Refresh vehicle data to get updated entretiens
-        await fetchVehicle();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          vehicleData = Map<String, dynamic>.from(data);
+          selectedDriver = vehicleData['responsable'];
+        });
 
-        String message;
-        switch (statut) {
-          case 'termine':
-            message = 'Entretien ajouté à l\'historique';
-            break;
-          case 'en_cours':
-            message = 'Entretien en cours ajouté';
-            break;
-          default:
-            message = 'Entretien planifié avec succès';
-        }
+        String message = statut == 'termine'
+            ? 'Entretien ajouté à l\'historique'
+            : 'Entretien planifié avec succès';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message)),
         );
       } else {
         print('Erreur addEntretien: ${response.body}');
-        final errorData = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: ${errorData['message'] ?? 'Erreur inconnue'}')),
+          SnackBar(content: Text('Erreur: ${response.body}')),
         );
       }
     } catch (e) {
@@ -209,86 +201,32 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
   Future<void> deleteEntretien(Map<String, dynamic> entretien) async {
     try {
       final token = Get.find<AuthController>().token;
-      final entretienId = entretien['_id'];
-
-      if (entretienId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur: ID de l\'entretien non trouvé')),
-        );
-        return;
-      }
-
-      // Use DELETE method with entretien ID in the URL
       final response = await http.delete(
-        Uri.parse('$vehicleBaseUrl/${vehicleData['_id']}/entretiens/$entretienId'),
+        Uri.parse('$vehicleBaseUrl/${vehicleData['_id']}/entretiens'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
+        body: jsonEncode({'entretienId': entretien['_id']}),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        await fetchVehicle();
-
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          vehicleData = Map<String, dynamic>.from(data);
+          selectedDriver = vehicleData['responsable'];
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Entretien supprimé avec succès')),
+          const SnackBar(content: Text('Entretien supprimé')),
         );
       } else {
-        print('Erreur deleteEntretien: ${response.statusCode} - ${response.body}');
-        final errorData = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+        print('Erreur deleteEntretien: ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: ${errorData['message'] ?? 'Impossible de supprimer l\'entretien'}')),
+          SnackBar(content: Text('Erreur: ${response.body}')),
         );
       }
     } catch (e) {
       print('Erreur réseau deleteEntretien: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur réseau: $e')),
-      );
-    }
-  }
-
-
-  Future<void> markEntretienAsCompleted(Map<String, dynamic> entretien) async {
-    try {
-      final token = Get.find<AuthController>().token;
-      final entretienId = entretien['_id'];
-
-      if (entretienId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur: ID de l\'entretien non trouvé')),
-        );
-        return;
-      }
-
-      final body = {
-        'statut': 'termine',
-        'dateRealisation': DateTime.now().toIso8601String().split('T')[0],
-      };
-
-      final response = await http.put(
-        Uri.parse('$vehicleBaseUrl/${vehicleData['_id']}/entretiens/$entretienId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200) {
-        await fetchVehicle();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Entretien marqué comme terminé')),
-        );
-      } else {
-        print('Erreur markCompleted: ${response.body}');
-        final errorData = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: ${errorData['message'] ?? 'Erreur inconnue'}')),
-        );
-      }
-    } catch (e) {
-      print('Erreur réseau markCompleted: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur réseau: $e')),
       );
@@ -482,7 +420,6 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                         historique: List<Map<String, dynamic>>.from(vehicleData['historiqueEntretiens'] ?? []),
                         onAdd: (type, cout, date) => addEntretien(type, cout, date),
                         onDelete: (entretien) => deleteEntretien(entretien),
-                        onMarkCompleted: (entretien) => markEntretienAsCompleted(entretien),
                       ),
                     ],
                   ),
@@ -502,7 +439,6 @@ class EntretiensSection extends StatefulWidget {
   final List<Map<String, dynamic>> historique;
   final Future<void> Function(String type, String cout, DateTime date) onAdd;
   final Future<void> Function(Map<String, dynamic> entretien) onDelete;
-  final Future<void> Function(Map<String, dynamic> entretien) onMarkCompleted;
 
   const EntretiensSection({
     super.key,
@@ -510,7 +446,6 @@ class EntretiensSection extends StatefulWidget {
     required this.historique,
     required this.onAdd,
     required this.onDelete,
-    required this.onMarkCompleted,
   });
 
   @override
@@ -548,14 +483,9 @@ class _EntretiensSectionState extends State<EntretiensSection> {
   String _formatCost(dynamic costValue) {
     if (costValue == null) return '0';
     if (costValue is num) {
-      return costValue.toStringAsFixed(2);
-    }
-    try {
-      final parsed = double.parse(costValue.toString());
-      return parsed.toStringAsFixed(2);
-    } catch (e) {
       return costValue.toString();
     }
+    return costValue.toString();
   }
 
   // Helper method to determine if date is in the past
@@ -574,27 +504,6 @@ class _EntretiensSectionState extends State<EntretiensSection> {
       final today = DateTime(now.year, now.month, now.day);
       final entretienDate = DateTime(date.year, date.month, date.day);
       return entretienDate.isBefore(today);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // Helper method to determine if date is today
-  bool _isDateToday(dynamic dateValue) {
-    if (dateValue == null) return false;
-    try {
-      DateTime date;
-      if (dateValue is String) {
-        date = DateTime.parse(dateValue);
-      } else if (dateValue is DateTime) {
-        date = dateValue;
-      } else {
-        return false;
-      }
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final entretienDate = DateTime(date.year, date.month, date.day);
-      return entretienDate.isAtSameMomentAs(today);
     } catch (e) {
       return false;
     }
@@ -632,9 +541,9 @@ class _EntretiensSectionState extends State<EntretiensSection> {
                   TextFormField(
                     decoration: const InputDecoration(
                         labelText: 'Coût (TND)',
-                        hintText: 'ex: 150.50'
+                        hintText: 'ex: 150'
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: TextInputType.number,
                     onSaved: (val) => cout = val ?? '',
                     validator: (val) {
                       if (val == null || val.isEmpty) return "Champ requis";
@@ -672,18 +581,12 @@ class _EntretiensSectionState extends State<EntretiensSection> {
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
-                        _isDateToday(date)
-                            ? "📅 Entretien prévu pour aujourd'hui"
-                            : _isDateInPast(date)
+                        _isDateInPast(date)
                             ? "⚠️ Cette date est dans le passé - sera ajoutée à l'historique"
                             : "✅ Entretien planifié pour le futur",
                         style: TextStyle(
                             fontSize: 12,
-                            color: _isDateToday(date)
-                                ? Colors.blue
-                                : _isDateInPast(date)
-                                ? Colors.orange
-                                : Colors.green,
+                            color: _isDateInPast(date) ? Colors.orange : Colors.green,
                             fontWeight: FontWeight.w500
                         ),
                       ),
@@ -725,33 +628,16 @@ class _EntretiensSectionState extends State<EntretiensSection> {
 
   Widget _buildEntretienTile(Map<String, dynamic> entretien, bool isUpcoming) {
     final theme = Theme.of(context);
-    final statut = _safeGetString(entretien, 'statut', 'planifie');
-
-    // Determine colors and icons based on status and type
-    IconData leadingIcon;
-    Color iconColor;
-    String statusText;
-
-    if (isUpcoming) {
-      if (_isDateToday(entretien['date'])) {
-        leadingIcon = Icons.today;
-        iconColor = Colors.orange;
-        statusText = "Aujourd'hui";
-      } else {
-        leadingIcon = Icons.schedule;
-        iconColor = Colors.blue;
-        statusText = "Prévu le";
-      }
-    } else {
-      leadingIcon = Icons.check_circle;
-      iconColor = Colors.green;
-      statusText = "Terminé le";
-    }
+    final dateText = isUpcoming ? "Prévu le" : "Effectué le";
+    final dateColor = isUpcoming ? Colors.blue : Colors.grey;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: ListTile(
-        leading: Icon(leadingIcon, color: iconColor),
+        leading: Icon(
+          isUpcoming ? Icons.schedule : Icons.check_circle_outline,
+          color: dateColor,
+        ),
         title: Text(
           _safeGetString(entretien, 'type', 'Type inconnu'),
           style: const TextStyle(fontWeight: FontWeight.w600),
@@ -759,7 +645,7 @@ class _EntretiensSectionState extends State<EntretiensSection> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("$statusText : ${_formatDate(entretien['date'])}"),
+            Text("$dateText : ${_formatDate(entretien['date'])}"),
             Text(
               "Coût : ${_formatCost(entretien['cout'])} TND",
               style: TextStyle(
@@ -767,59 +653,13 @@ class _EntretiensSectionState extends State<EntretiensSection> {
                 color: theme.colorScheme.primary,
               ),
             ),
-            if (!isUpcoming && entretien['dateRealisation'] != null)
-              Text(
-                "Réalisé le : ${_formatDate(entretien['dateRealisation'])}",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isUpcoming && !_isDateToday(entretien['date']))
-              IconButton(
-                icon: const Icon(Icons.check, color: Colors.green),
-                onPressed: () => _showMarkCompletedDialog(entretien),
-                tooltip: "Marquer comme terminé",
-              ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () => _showDeleteConfirmation(entretien),
-              tooltip: "Supprimer",
-            ),
-          ],
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.red),
+          onPressed: () => _showDeleteConfirmation(entretien),
         ),
         isThreeLine: true,
-      ),
-    );
-  }
-
-  void _showMarkCompletedDialog(Map<String, dynamic> entretien) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Marquer comme terminé"),
-        content: Text(
-          "Voulez-vous marquer cet entretien comme terminé ?\n\n${_safeGetString(entretien, 'type', 'Type inconnu')}\n\nIl sera déplacé vers l'historique.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onMarkCompleted(entretien);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text("Marquer terminé", style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
@@ -829,9 +669,7 @@ class _EntretiensSectionState extends State<EntretiensSection> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmer la suppression"),
-        content: Text(
-          "Êtes-vous sûr de vouloir supprimer cet entretien ?\n\n${_safeGetString(entretien, 'type', 'Type inconnu')}\nCoût: ${_formatCost(entretien['cout'])} TND\nDate: ${_formatDate(entretien['date'])}\n\nCette action est irréversible.",
-        ),
+        content: Text("Êtes-vous sûr de vouloir supprimer cet entretien ?\n\n${_safeGetString(entretien, 'type', 'Type inconnu')}"),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -856,39 +694,6 @@ class _EntretiensSectionState extends State<EntretiensSection> {
     final isDark = theme.brightness == Brightness.dark;
     final actionColor = isDark ? Colors.green : Colors.blue;
 
-    // Filter and sort entretiens
-    final upcomingEntretiens = widget.entretiensAVenir.where((e) {
-      final statut = _safeGetString(e, 'statut', 'planifie');
-      return statut == 'planifie' || statut == 'en_cours';
-    }).toList();
-
-    final historiqueEntretiens = widget.historique.where((e) {
-      final statut = _safeGetString(e, 'statut', 'planifie');
-      return statut == 'termine';
-    }).toList();
-
-    // Sort upcoming by date (ascending - nearest first)
-    upcomingEntretiens.sort((a, b) {
-      try {
-        final dateA = DateTime.parse(a['date'].toString());
-        final dateB = DateTime.parse(b['date'].toString());
-        return dateA.compareTo(dateB);
-      } catch (e) {
-        return 0;
-      }
-    });
-
-    // Sort historique by date (descending - most recent first)
-    historiqueEntretiens.sort((a, b) {
-      try {
-        final dateA = DateTime.parse((a['dateRealisation'] ?? a['date']).toString());
-        final dateB = DateTime.parse((b['dateRealisation'] ?? b['date']).toString());
-        return dateB.compareTo(dateA);
-      } catch (e) {
-        return 0;
-      }
-    });
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -897,7 +702,7 @@ class _EntretiensSectionState extends State<EntretiensSection> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-                "Gestion des Entretiens",
+                "Planification des Entretiens",
                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)
             ),
             IconButton(
@@ -909,92 +714,37 @@ class _EntretiensSectionState extends State<EntretiensSection> {
         ),
         const SizedBox(height: 10),
 
-        // Summary cards
-        Row(
-          children: [
-            Expanded(
-              child: Card(
-                color: Colors.blue.withOpacity(0.1),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      Icon(Icons.schedule, color: Colors.blue, size: 24),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${upcomingEntretiens.length}',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue),
-                      ),
-                      const Text('À venir', style: TextStyle(fontSize: 12, color: Colors.blue)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Card(
-                color: Colors.green.withOpacity(0.1),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 24),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${historiqueEntretiens.length}',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
-                      ),
-                      const Text('Terminés', style: TextStyle(fontSize: 12, color: Colors.green)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 15),
-
         // Prochains entretiens
         ExpansionTile(
-          initiallyExpanded: upcomingEntretiens.isNotEmpty,
           title: Row(
             children: [
               const Text("Prochains entretiens"),
               const SizedBox(width: 8),
-              if (upcomingEntretiens.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: actionColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${upcomingEntretiens.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: actionColor,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Text(
+                  '${widget.entretiensAVenir.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           leading: Icon(Icons.notifications_active, color: actionColor),
-          children: upcomingEntretiens.isEmpty
+          children: widget.entretiensAVenir.isEmpty
               ? [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.event_available, color: Colors.grey[400], size: 48),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Aucun entretien planifié",
-                    style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[600]),
-                  ),
-                ],
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "Aucun entretien planifié",
+                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
               ),
             )
           ]
-              : upcomingEntretiens
+              : widget.entretiensAVenir
               .map((entretien) => _buildEntretienTile(entretien, true))
               .toList(),
         ),
@@ -1005,92 +755,35 @@ class _EntretiensSectionState extends State<EntretiensSection> {
             children: [
               const Text("Historique"),
               const SizedBox(width: 8),
-              if (historiqueEntretiens.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.lightGreen : Colors.indigo,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${historiqueEntretiens.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.lightGreen : Colors.indigo,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Text(
+                  '${widget.historique.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           leading: Icon(Icons.history, color: isDark ? Colors.lightGreen : Colors.indigo),
-          children: historiqueEntretiens.isEmpty
+          children: widget.historique.isEmpty
               ? [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history_toggle_off, color: Colors.grey[400], size: 48),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Aucun entretien dans l'historique",
-                    style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[600]),
-                  ),
-                ],
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "Aucun entretien dans l'historique",
+                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
               ),
             )
           ]
-              : historiqueEntretiens
+              : widget.historique
               .map((entretien) => _buildEntretienTile(entretien, false))
               .toList(),
         ),
-
-        // Total cost summary
-        if (historiqueEntretiens.isNotEmpty)
-          Card(
-            margin: const EdgeInsets.only(top: 16),
-            color: theme.colorScheme.surface,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.receipt_long, color: theme.colorScheme.primary),
-                      const SizedBox(width: 8),
-                      const Text('Coût total des entretiens:', style: TextStyle(fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                  Text(
-                    '${_calculateTotalCost(historiqueEntretiens)} TND',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
-  }
-
-  String _calculateTotalCost(List<Map<String, dynamic>> entretiens) {
-    double total = 0.0;
-    for (final entretien in entretiens) {
-      try {
-        final cost = entretien['cout'];
-        if (cost != null) {
-          if (cost is num) {
-            total += cost.toDouble();
-          } else {
-            total += double.parse(cost.toString());
-          }
-        }
-      } catch (e) {
-        // Skip invalid cost values
-      }
-    }
-    return total.toStringAsFixed(2);
   }
 }

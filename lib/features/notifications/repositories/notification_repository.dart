@@ -1,36 +1,57 @@
-import 'package:stage/features/notifications/models/notification_type.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:get/get.dart';
+import 'package:stage/controllers/auth_controller.dart';
+import '../models/notification_type.dart';
 
 class NotificationRepository {
-  List <NotificationItem > getNotifications() {
-    return [
-      NotificationItem(
-          title: "Rappel d’entretien",
-          message: "Le véhicule Renault Kangoo (TN-123-456) est dû pour un entretien aujourd’hui (vidange moteur).",
-          time: 'il y a 5 minutes',
-          type:NotificationType.entretien,
-        isRead: true,
-      ),
-      NotificationItem(
-        title: "Rappel hebdomadaire de vérification",
-        message: "N’oubliez pas de vérifier les niveaux (huile, eau, frein) des véhicules affectés.",
-        time: 'il y a 2 heures',
-        type:NotificationType.rappel,
-        isRead: true,
-      ),
-      NotificationItem(
-        title: "Dépassement de kilométrage",
-        message: "Le véhicule Toyota Hilux a dépassé le seuil de 10 000 km sans entretien.",
-        time: 'il y a 3 heures',
-        type:NotificationType.alerte,
-        isRead: true,
-      ),
-      NotificationItem(
-        title: "Suivi post-entretien",
-        message: "L’entretien du véhicule Opel Combo a été effectué. Prochaine vérification dans 3 mois.",
-        time: 'il y a 2 jours',
-        type:NotificationType.suivi,
-        isRead: true,
-      ),
-    ];
+  final String baseUrl = "http://10.0.2.2:5000/api/notifications";
+
+  Future<List<NotificationItem>> getNotifications() async {
+    final token = Get.find<AuthController>().token;
+
+    final response = await http.get(
+      Uri.parse(baseUrl),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(response.body);
+      return data.map((json) => NotificationItem.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load notifications');
+    }
   }
+
+  Future<void> markAllAsRead() async {
+    final token = Get.find<AuthController>().token;
+    await http.put(
+      Uri.parse('$baseUrl/mark-all-read'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+  }
+
+  Future<void> addNotification(String title, String message, String type) async {
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'title': title,
+        'message': message,
+        'type': type,
+      }),
+    );
+
+    if (response.statusCode != 201) {
+      throw Exception('Failed to add notification');
+    }
+  }
+
 }
+

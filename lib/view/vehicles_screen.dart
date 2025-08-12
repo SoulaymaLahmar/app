@@ -322,7 +322,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('N° Série: ${vehicle['numeroSerie']}'),
-                          Text('Date: ${vehicle['type']}'),
+                          Text('Type: ${vehicle['type']}'),
                           Row(
                             children: [
                               Text('État: ', style: TextStyle(fontWeight: FontWeight.bold)),
