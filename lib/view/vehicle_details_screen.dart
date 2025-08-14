@@ -1,4 +1,4 @@
-// Updated VehicleDetailsScreen with proper date-based entretien handling
+// Updated VehicleDetailsScreen with automatic entretien refresh
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -415,7 +415,9 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                         ],
                       ),
                       const SizedBox(height: 25),
+                      // KEY FIX: Use a Key to force rebuild of EntretiensSection
                       EntretiensSection(
+                        key: ValueKey('${vehicleData['_id']}_${DateTime.now().millisecondsSinceEpoch}'),
                         entretiensAVenir: List<Map<String, dynamic>>.from(vehicleData['entretiensAVenir'] ?? []),
                         historique: List<Map<String, dynamic>>.from(vehicleData['historiqueEntretiens'] ?? []),
                         onAdd: (type, cout, date) => addEntretien(type, cout, date),
@@ -433,7 +435,7 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
   }
 }
 
-// Updated EntretiensSection widget
+// Updated EntretiensSection widget - No changes needed here, the key fix above will work
 class EntretiensSection extends StatefulWidget {
   final List<Map<String, dynamic>> entretiensAVenir;
   final List<Map<String, dynamic>> historique;
