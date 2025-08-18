@@ -24,6 +24,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
   @override
   void initState() {
     super.initState();
+    controller.loadData();
 
     _animationController = AnimationController(
       vsync: this,
@@ -43,7 +44,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
 
   @override
   void dispose() {
-    _animationController?.dispose();
+    Get.delete<StatisticsController>();
     super.dispose();
   }
 

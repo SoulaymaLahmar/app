@@ -9,14 +9,20 @@ import 'package:stage/view/splash_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'features/statistics/controllers/statistics_controller.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await GetStorage.init();
   await GetStorage().write('isFirstTime', true);
   await initializeDateFormatting('fr_FR', null);
+
+  // Register controllers
   Get.put(ThemeController());
   Get.put(AuthController());
   Get.put(NavigationController());
+  Get.lazyPut(() => StatisticsController(), fenix: true);
+
   runApp(const MyApp());
 }
 

@@ -448,6 +448,7 @@ class _DriversScreenState extends State<DriversScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "add_driver_fab",
         onPressed: _openAddDriverForm,
         child: const Icon(Icons.add),
         tooltip: "Ajouter un chauffeur",

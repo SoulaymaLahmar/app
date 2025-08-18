@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:month_picker_dialog/month_picker_dialog.dart';
-
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:stage/controllers/theme_controller.dart';
 import 'package:stage/features/statistics/screens/statistics_screen.dart';
 import 'package:stage/features/notifications/view/notifications_screen.dart';
-import 'package:stage/view/widgets/custom_search_bar.dart';
-
 import '../controllers/auth_controller.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,6 +20,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   DateTime selectedDate = DateTime.now();
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
+  bool isLoading = true;
+  Map<String, dynamic> dashboardData = {};
+  List<dynamic> recentVehicles = [];
+  List<dynamic> recentActivities = [];
+  String? error;
+  static const String BASE_URL = 'http://10.0.2.2:5000/api';
 
   @override
   void initState() {
@@ -37,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       curve: Curves.easeInOut,
     ));
     _animationController!.forward();
+    _fetchDashboardData();
   }
 
   @override
@@ -45,6 +51,147 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Future<void> _fetchDashboardData() async {
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
+
+    try {
+      print('AuthController user data: ${AuthController.to.user}');
+      final userId = AuthController.to.user?['_id'] ??
+          AuthController.to.user?['id'] ??
+          AuthController.to.user?['userId'];
+      final token = AuthController.to.token;
+
+      print('Extracted userId: $userId');
+      print('Token available: ${token != null}');
+
+      if (userId == null) {
+        throw Exception('User ID not found. Available user data: ${AuthController.to.user?.keys}');
+      }
+
+      await Future.wait([
+        _fetchVehicleStats(userId, token),
+        _fetchRecentVehicles(userId, token),
+        _fetchRecentActivities(userId, token),
+        _fetchMonthlyStats(userId, token, selectedDate),
+      ]);
+
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = 'Erreur de chargement des données: $e';
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchVehicleStats(String userId, String? token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$BASE_URL/dashboard/vehicles/stats/$userId'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('Vehicle stats response: ${response.statusCode}');
+      print('Vehicle stats URL: $BASE_URL/dashboard/vehicles/stats/$userId');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data != null) {
+          dashboardData['vehicleStats'] = data;
+        }
+      } else if (response.statusCode == 404) {
+        dashboardData['vehicleStats'] = {
+          'total': 0,
+          'enService': 0,
+          'enMaintenance': 0,
+          'horsService': 0,
+          'totalKilometrage': 0,
+          'coutTotal': 0
+        };
+        print('Vehicle stats endpoint not found, using empty stats');
+      } else {
+        throw Exception('Failed to load vehicle stats: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error in _fetchVehicleStats: $e');
+      dashboardData['vehicleStats'] = {
+        'total': 0,
+        'enService': 0,
+        'enMaintenance': 0,
+        'horsService': 0,
+        'totalKilometrage': 0,
+        'coutTotal': 0
+      };
+    }
+  }
+  Future<void> _fetchRecentVehicles(String userId, String? token) async {
+    final response = await http.get(
+      Uri.parse('$BASE_URL/dashboard/vehicles/recent/$userId?limit=3'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data != null && data['vehicles'] != null) {
+        recentVehicles = List<Map<String, dynamic>>.from(data['vehicles']);
+      } else {
+        recentVehicles = [];
+      }
+    } else {
+      throw Exception('Failed to load recent vehicles: ${response.statusCode}');
+    }
+  }
+
+  Future<void> _fetchRecentActivities(String userId, String? token) async {
+    final response = await http.get(
+      Uri.parse('$BASE_URL/dashboard/activities/recent/$userId?limit=3'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data != null && data['activities'] != null) {
+        recentActivities = List<Map<String, dynamic>>.from(data['activities']);
+      } else {
+        recentActivities = [];
+      }
+    } else {
+      throw Exception('Failed to load recent activities: ${response.statusCode}');
+    }
+  }
+
+  Future<void> _fetchMonthlyStats(String userId, String? token, DateTime date) async {
+    final response = await http.get(
+      Uri.parse('$BASE_URL/dashboard/stats/monthly/$userId?year=${date.year}&month=${date.month}'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data != null) {
+        dashboardData['monthlyStats'] = data;
+      }
+    } else {
+      throw Exception('Failed to load monthly stats: ${response.statusCode}');
+    }
+  }
   Future<void> _selectMonth() async {
     final DateTime? picked = await showMonthPicker(
       context: context,
@@ -57,6 +204,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() {
         selectedDate = picked;
       });
+      final userId = AuthController.to.user['_id'];
+      final token = AuthController.to.token;
+      await _fetchMonthlyStats(userId, token, selectedDate);
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _fetchDashboardData();
+  }
+
+  Color _getVehicleStateColor(String etat) {
+    switch (etat) {
+      case 'En service':
+        return const Color(0xFF10B981);
+      case 'En maintenance':
+        return const Color(0xFFF59E0B);
+      case 'Hors service':
+        return const Color(0xFFEF4444);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getActivityIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'entretien':
+        return Icons.build_rounded;
+      case 'ajout':
+      case 'système':
+        return Icons.add_circle_rounded;
+      case 'affectation':
+        return Icons.person_add_rounded;
+      default:
+        return Icons.info_rounded;
     }
   }
 
@@ -65,11 +246,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final String formattedMonth = DateFormat.yMMMM('fr_FR').format(selectedDate);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF8FAFC),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (error != null) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF8FAFC),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
+              const SizedBox(height: 16),
+              Text(error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchDashboardData,
+                child: const Text('Réessayer'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0E27) : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => setState(() {}),
+          onRefresh: _refreshData,
           color: Theme.of(context).primaryColor,
           child: _fadeAnimation != null
               ? FadeTransition(
@@ -141,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
                 backgroundImage: imageUrl != null && imageUrl.isNotEmpty
                     ? NetworkImage(imageUrl)
-                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
+                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3') as ImageProvider,
               ),
             ),
           ),
@@ -284,15 +495,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildStatCards() {
+    final stats = dashboardData['vehicleStats'] ?? {};
+    final totalVehicles = stats['total'] ?? 0;
+    final enPanne = stats['enMaintenance'] ?? 0;
+    final actifs = stats['enService'] ?? 0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          Expanded(child: EnhancedStatCard(title: 'Véhicules', value: '25', color: const Color(0xFF3B82F6), icon: Icons.directions_car_rounded)),
+          Expanded(child: EnhancedStatCard(
+            title: 'Véhicules',
+            value: totalVehicles.toString(),
+            color: const Color(0xFF3B82F6),
+            icon: Icons.directions_car_rounded,
+          )),
           const SizedBox(width: 12),
-          Expanded(child: EnhancedStatCard(title: 'En panne', value: '3', color: const Color(0xFFEF4444), icon: Icons.warning_rounded)),
+          Expanded(child: EnhancedStatCard(
+            title: 'En panne',
+            value: enPanne.toString(),
+            color: const Color(0xFFEF4444),
+            icon: Icons.warning_rounded,
+          )),
           const SizedBox(width: 12),
-          Expanded(child: EnhancedStatCard(title: 'Actifs', value: '22', color: const Color(0xFF10B981), icon: Icons.check_circle_rounded)),
+          Expanded(child: EnhancedStatCard(
+            title: 'Actifs',
+            value: actifs.toString(),
+            color: const Color(0xFF10B981),
+            icon: Icons.check_circle_rounded,
+          )),
         ],
       ),
     );
@@ -300,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildMonthlyStats(String month) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final monthlyStats = dashboardData['monthlyStats'] ?? {};
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -374,25 +606,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 EnhancedMonthlyStatCard(
                   icon: Icons.attach_money_rounded,
                   label: "Coût total",
-                  value: "3,400 TND",
+                  value: "${monthlyStats['totalCost'] ?? 0} TND",
                   color: const Color(0xFF8B5CF6),
                 ),
                 EnhancedMonthlyStatCard(
                   icon: Icons.local_gas_station_rounded,
                   label: "Carburant",
-                  value: "720 L",
+                  value: "${monthlyStats['fuelConsumption'] ?? 0} L",
                   color: const Color(0xFFF59E0B),
                 ),
                 EnhancedMonthlyStatCard(
                   icon: Icons.speed_rounded,
                   label: "Distance",
-                  value: "6,400 km",
+                  value: "${monthlyStats['totalDistance'] ?? 0} km",
                   color: const Color(0xFF3B82F6),
                 ),
                 EnhancedMonthlyStatCard(
                   icon: Icons.build_circle_rounded,
                   label: "Entretiens",
-                  value: "4",
+                  value: "${monthlyStats['maintenanceCount'] ?? 0}",
                   color: const Color(0xFF10B981),
                 ),
               ],
@@ -404,28 +636,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildRecentVehicles() {
-    final List<Map<String, dynamic>> vehicles = [
-      {'marque': 'Peugeot', 'modele': '208', 'etat': 'En service', 'color': const Color(0xFF10B981)},
-      {'marque': 'Renault', 'modele': 'Clio', 'etat': 'En maintenance', 'color': const Color(0xFFF59E0B)},
-      {'marque': 'Dacia', 'modele': 'Dokker', 'etat': 'Hors service', 'color': const Color(0xFFEF4444)},
-    ];
-
     return _buildSectionCard(
       title: "Véhicules récents",
       icon: Icons.directions_car_rounded,
-      children: vehicles.map((v) => _buildVehicleItem(v)).toList(),
+      children: recentVehicles.isEmpty
+          ? [const Text('Aucun véhicule récent')]
+          : recentVehicles.map((vehicle) => _buildVehicleItem(vehicle)).toList(),
     );
   }
 
   Widget _buildVehicleItem(Map<String, dynamic> vehicle) {
+    final etat = vehicle['etat'] ?? 'En service';
+    final color = _getVehicleStateColor(etat);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: vehicle['color'].withOpacity(0.08),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: vehicle['color'].withOpacity(0.2),
+          color: color.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -434,12 +665,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: vehicle['color'].withOpacity(0.15),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               Icons.directions_car_rounded,
-              color: vehicle['color'],
+              color: color,
               size: 20,
             ),
           ),
@@ -457,9 +688,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  vehicle['etat'],
+                  etat,
                   style: TextStyle(
-                    color: vehicle['color'],
+                    color: color,
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
                   ),
@@ -467,26 +698,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
+          if (vehicle['kilometrage'] != null)
+            Text(
+              "${vehicle['kilometrage']} km",
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildRecentActivities() {
-    final List<Map<String, dynamic>> activities = [
-      {"title": "Vidange Camion B45", "date": "24 Juil", "type": "Entretien", "icon": Icons.build_rounded, "color": const Color(0xFF10B981)},
-      {"title": "Ajout véhicule Renault Clio", "date": "23 Juil", "type": "Système", "icon": Icons.add_circle_rounded, "color": const Color(0xFF3B82F6)},
-      {"title": "Chauffeur Ali affecté", "date": "21 Juil", "type": "Affectation", "icon": Icons.person_add_rounded, "color": const Color(0xFF8B5CF6)},
-    ];
-
     return _buildSectionCard(
       title: "Activités récentes",
       icon: Icons.timeline_rounded,
-      children: activities.map((activity) => _buildActivityItem(activity)).toList(),
+      children: recentActivities.isEmpty
+          ? [const Text('Aucune activité récente')]
+          : recentActivities.map((activity) => _buildActivityItem(activity)).toList(),
     );
   }
 
   Widget _buildActivityItem(Map<String, dynamic> activity) {
+    final activityType = activity['type'] ?? 'info';
+    final activityColor = activity['color'] != null
+        ? Color(int.parse(activity['color'].toString().replaceAll('#', '0xFF')))
+        : const Color(0xFF3B82F6);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -507,12 +747,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: activity['color'].withOpacity(0.15),
+              color: activityColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
-              activity['icon'],
-              color: activity['color'],
+              _getActivityIcon(activityType),
+              color: activityColor,
               size: 20,
             ),
           ),
@@ -522,7 +762,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  activity['title'],
+                  activity['title'] ?? activity['description'] ?? 'Activité',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
@@ -530,7 +770,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  activity['date'],
+                  activity['date'] != null
+                      ? DateFormat('dd MMM').format(DateTime.parse(activity['date']))
+                      : 'Date inconnue',
                   style: TextStyle(
                     color: Colors.grey[600],
                     fontSize: 13,
@@ -542,13 +784,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: activity['color'].withOpacity(0.15),
+              color: activityColor.withOpacity(0.15),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              activity['type'],
+              activityType,
               style: TextStyle(
-                color: activity['color'],
+                color: activityColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),

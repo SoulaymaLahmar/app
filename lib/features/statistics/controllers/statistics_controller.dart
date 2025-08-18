@@ -23,7 +23,6 @@ class StatisticsController extends GetxController {
     super.onInit();
     loadData();
   }
-
   Future<void> loadData() async {
     try {
       isLoading(true);

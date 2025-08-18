@@ -362,6 +362,7 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "add_vehicle_fab",
         onPressed: _openAddVehicleForm,
         child: Icon(Icons.add),
         tooltip: "Ajouter un véhicule",
