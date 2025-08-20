@@ -1,3 +1,4 @@
+
 // Updated VehicleDetailsScreen with automatic entretien refresh
 
 import 'dart:convert';
@@ -44,6 +45,95 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
     final value = map[key];
     if (value == null) return defaultValue;
     return value.toString();
+  }
+
+  Widget buildVehicleImage() {
+    final vehicleImage = vehicleData['image'];
+
+    if (vehicleImage == null || vehicleImage.toString().isEmpty) {
+      // Show default placeholder
+      return Container(
+        height: 180,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Icon(
+          Icons.directions_car,
+          size: 60,
+          color: Colors.grey[600],
+        ),
+      );
+    }
+
+    String imageUrl;
+    if (vehicleImage.toString().startsWith('http://') || vehicleImage.toString().startsWith('https://')) {
+      imageUrl = vehicleImage.toString();
+    } else {
+      // Construct full URL for server images
+      final String baseUrl = 'http://10.0.2.2:5000';
+      imageUrl = vehicleImage.toString().startsWith('/')
+          ? '$baseUrl$vehicleImage'
+          : '$baseUrl/uploads/$vehicleImage';
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.network(
+        imageUrl,
+        height: 180,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 180,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('Error loading vehicle image: $error');
+          return Container(
+            height: 180,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.broken_image,
+                  size: 40,
+                  color: Colors.grey[600],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Image non disponible',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> fetchVehicle() async {
@@ -316,10 +406,6 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final vehicleImage = vehicleData['image'];
-    final imageWidget = (vehicleImage != null && vehicleImage.toString().startsWith('http'))
-        ? Image.network(vehicleImage, height: 180, fit: BoxFit.cover)
-        : Image.asset(vehicleImage ?? 'assets/images/d73af822e7ae484561635ad1550fd784.jpg', height: 180);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -344,7 +430,7 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(borderRadius: BorderRadius.circular(16), child: imageWidget),
+              child: buildVehicleImage(),
             ),
             const SizedBox(height: 10),
             Expanded(
@@ -665,7 +751,6 @@ class _EntretiensSectionState extends State<EntretiensSection> {
       ),
     );
   }
-
   void _showDeleteConfirmation(Map<String, dynamic> entretien) {
     showDialog(
       context: context,

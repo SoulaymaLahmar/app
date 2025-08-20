@@ -288,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
-                SliverToBoxAdapter(child: _buildHeader()),
+                SliverToBoxAdapter(child: buildHeader()),
                 SliverToBoxAdapter(child: const SizedBox(height: 24)),
                 SliverToBoxAdapter(child: _buildWelcomeCard()),
                 SliverToBoxAdapter(child: const SizedBox(height: 24)),
@@ -306,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               : CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader()),
+              SliverToBoxAdapter(child: buildHeader()),
               SliverToBoxAdapter(child: const SizedBox(height: 24)),
               SliverToBoxAdapter(child: _buildWelcomeCard()),
               SliverToBoxAdapter(child: const SizedBox(height: 24)),
@@ -325,10 +325,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader() {
+  Widget buildHeader() {
     final user = AuthController.to.user;
     final imageUrl = user['profileImage'];
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // DEBUG: Print user data to console
+    print('=== USER DATA DEBUG ===');
+    print('Full user object: $user');
+    print('ProfileImage field: $imageUrl');
+    print('ImageUrl type: ${imageUrl.runtimeType}');
+    print('ImageUrl isEmpty: ${imageUrl?.isEmpty ?? true}');
+    print('======================');
+
+    // Build complete image URL
+    String? fullImageUrl;
+    if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+      if (imageUrl.toString().startsWith('http')) {
+        fullImageUrl = imageUrl.toString();
+      } else {
+        // Assuming your backend returns path like "/uploads/filename.jpg"
+        fullImageUrl = 'http://10.0.2.2:5000$imageUrl';
+      }
+      print('Final constructed URL: $fullImageUrl');
+    }
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -350,9 +370,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: CircleAvatar(
                 radius: 26,
                 backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                backgroundImage: imageUrl != null && imageUrl.isNotEmpty
-                    ? NetworkImage(imageUrl)
-                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3') as ImageProvider,
+                child: ClipOval(
+                  child: fullImageUrl != null
+                      ? Image.network(
+                    fullImageUrl,
+                    width: 52,
+                    height: 52,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print('IMAGE LOAD ERROR: $error');
+                      // Show default image if network fails
+                      return Image.asset(
+                        'assets/images/ff0436d36131c01b6c504901b407dcf3.jpg',
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) {
+                        print('IMAGE LOADED SUCCESSFULLY');
+                        return child;
+                      }
+                      return const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    },
+                  )
+                      : Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      size: 30,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -371,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  AuthController.to.user['name'] ?? '',
+                  AuthController.to.user['name'] ?? 'No Name',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 20,
@@ -381,6 +439,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
+          // Your other header actions...
           _buildHeaderAction(Icons.notifications_outlined, () => Get.to(() => NotificationsScreen())),
           const SizedBox(width: 8),
           _buildHeaderAction(Icons.bar_chart_rounded, () => Get.to(() => StatisticsScreen())),

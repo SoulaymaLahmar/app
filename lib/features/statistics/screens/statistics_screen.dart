@@ -244,9 +244,9 @@ class _StatisticsScreenState extends State<StatisticsScreen>
 
   Widget _buildKPICards(Color cardColor, Color textColor, bool isDark) {
     return GetBuilder<StatisticsController>(
-      id: 'kpi-cards', // Add specific ID
+      id: 'kpi-cards',
       builder: (controller) {
-        final totalCostTrend = "+12%"; // You can calculate this from historical data
+        final totalCostTrend = "+12%";
         final distanceTrend = "+8%";
         final vehiclesTrend = "0%";
         final efficiencyTrend = "+5%";
@@ -435,7 +435,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
           ),
           const SizedBox(height: 20),
           GetBuilder<StatisticsController>(
-            id: 'cost-analysis', // Add specific ID
+            id: 'cost-analysis',
             builder: (controller) {
               final costSummary = controller.costSummary;
               if (costSummary.isEmpty) {

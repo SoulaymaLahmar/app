@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:get/get.dart';
-import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -73,19 +72,28 @@ class AuthController extends GetxController {
     }
   }
 
-  // register
-  Future<void> register(String name, String email, String password) async {
+  // register - FIXED: Changed 'photo' to 'profileImage'
+  Future<void> register(String name, String email, String password, [XFile? photo]) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'name': name, 'email': email, 'password': password}),
-      );
+      final uri = Uri.parse('$baseUrl/register');
 
-      final data = jsonDecode(response.body);
+      var request = http.MultipartRequest('POST', uri)
+        ..fields['name'] = name
+        ..fields['email'] = email
+        ..fields['password'] = password;
+
+      if (photo != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('profileImage', photo.path), // FIXED: was 'photo'
+        );
+      }
+
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+      final data = jsonDecode(responseBody);
 
       if (response.statusCode == 201) {
-        Get.snackbar("Succès", data['message']);
+        Get.snackbar("Succès", data['message'] ?? "Compte créé");
         await Future.delayed(const Duration(seconds: 1));
         Get.offAll(() => SigninScreen());
       } else {
@@ -93,6 +101,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       Get.snackbar("Erreur", "Erreur lors de l'inscription : $e");
+      print('erreur: $e');
     }
   }
 
@@ -104,13 +113,13 @@ class AuthController extends GetxController {
     Get.offAll(() => SigninScreen());
   }
 
-  // update profile (name, email, phone )
+  // FIXED: Corrected endpoint URL
   Future<void> updateUserProfileOnServer({
     required String name,
     required String email,
     required String phone,
   }) async {
-    final url = Uri.parse('$baseUrl/users/${user['id']}');
+    final url = Uri.parse('$baseUrl/${user['id']}'); // FIXED: removed '/users'
 
     try {
       final response = await http.put(
@@ -134,10 +143,12 @@ class AuthController extends GetxController {
         Get.back();
         Get.snackbar('Succès', 'Profil mis à jour');
       } else {
-        Get.snackbar('Erreur', 'Mise à jour impossible');
+        final errorBody = jsonDecode(response.body);
+        Get.snackbar('Erreur', errorBody['message'] ?? 'Mise à jour impossible');
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur réseau : $e');
+      print('Error updating profile: $e');
     }
   }
 
@@ -151,14 +162,14 @@ class AuthController extends GetxController {
     }
   }
 
-  // upload profile image
+  // upload profile image - FIXED: Changed endpoint and field name
   Future<void> uploadProfileImage(File imageFile) async {
     try {
-      final uri = Uri.parse('$baseUrl/profile-image');
+      final uri = Uri.parse('$baseUrl/profile/image'); // FIXED: was '/profile-image'
 
-      var request = http.MultipartRequest('PATCH', uri)
+      var request = http.MultipartRequest('PUT', uri) // FIXED: changed to PUT if that's what backend expects
         ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+        ..files.add(await http.MultipartFile.fromPath('profileImage', imageFile.path)); // FIXED: was 'image'
 
       final response = await request.send();
 
@@ -170,10 +181,14 @@ class AuthController extends GetxController {
         update();
         Get.snackbar('Succès', 'Photo mise à jour');
       } else {
-        Get.snackbar('Erreur', 'Échec du téléchargement de la photo');
+        final respStr = await response.stream.bytesToString();
+        final errorData = jsonDecode(respStr);
+        Get.snackbar('Erreur', errorData['message'] ?? 'Échec du téléchargement de la photo');
+        print('Upload error: ${response.statusCode} - $respStr');
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur image : $e');
+      print('Upload profile image error: $e');
     }
   }
 }

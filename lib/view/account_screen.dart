@@ -5,8 +5,10 @@ import 'package:stage/controllers/auth_controller.dart';
 import 'package:stage/features/edit%20profile/screens/edit_profile_screen.dart';
 import 'package:stage/features/help%20center/screens/help_center_screen.dart';
 import 'package:stage/utils/app_textstyles.dart';
+import 'package:stage/view/drivers_screen.dart';
 import 'package:stage/view/settings_screen.dart';
 import 'package:stage/view/signin_screen.dart';
+import 'package:stage/view/vehicles_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
@@ -52,6 +54,20 @@ class AccountScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GetBuilder<AuthController>(
       builder: (authController) {
+        final user = authController.user;
+        final imageUrl = user['profileImage'];
+
+        // Build complete image URL (same logic as header)
+        String? fullImageUrl;
+        if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+          if (imageUrl.toString().startsWith('http')) {
+            fullImageUrl = imageUrl.toString();
+          } else {
+            // Construct full URL for relative paths
+            fullImageUrl = 'http://10.0.2.2:5000$imageUrl';
+          }
+        }
+
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -63,12 +79,48 @@ class AccountScreen extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 50,
-                backgroundImage: authController.user['profileImage'] != null
-                    ? NetworkImage(authController.user['profileImage'])
-                    : const AssetImage('assets/images/ff0436d36131c01b6c504901b407dcf3.jpg') as ImageProvider,
-
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                child: ClipOval(
+                  child: fullImageUrl != null
+                      ? Image.network(
+                    fullImageUrl,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print('ACCOUNT IMAGE LOAD ERROR: $error');
+                      // Show default image if network fails
+                      return Image.asset(
+                        'assets/images/ff0436d36131c01b6c504901b407dcf3.jpg',
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) {
+                        return child;
+                      }
+                      return const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    },
+                  )
+                      : Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      size: 50,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
               ),
-
               const SizedBox(height: 16),
               Text(
                 authController.user['name'] ?? '',
@@ -111,162 +163,157 @@ class AccountScreen extends StatelessWidget {
       },
     );
   }
-
-
-  Widget _buildMenuSection(BuildContext context ){
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final menuItems = [
-      {'icon': Icons.directions_car_outlined, 'title': 'Véhicules'},
-      {'icon': Icons.person_outline, 'title': 'Conducteurs'},
-      {'icon': Icons.help_outline, 'title': 'Centre d\'aide'},
-      {'icon': Icons.logout_outlined, 'title': 'Se déconnecter'},
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: menuItems.map((item){
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: isDark ? Colors.black.withOpacity(0.2):
-                  Colors.grey.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ListTile(
-              leading: Icon(
-                item['icon'] as IconData,
-                color: Theme.of(context).primaryColor,
+}
+Widget _buildMenuSection(BuildContext context ){
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final menuItems = [
+    {'icon': Icons.directions_car_outlined, 'title': 'Véhicules'},
+    {'icon': Icons.person_outline, 'title': 'Conducteurs'},
+    {'icon': Icons.help_outline, 'title': 'Centre d\'aide'},
+    {'icon': Icons.logout_outlined, 'title': 'Se déconnecter'},
+  ];
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Column(
+      children: menuItems.map((item){
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withOpacity(0.2):
+                Colors.grey.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              title: Text(
-                item['title'] as String,
-                style: AppTextStyle.withColor(
-                  AppTextStyle.bodyMedium,
-                  Theme.of(context).textTheme.bodyLarge!.color!,
-                ),
-              ),
-              trailing: Icon(
-                Icons.chevron_right,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-              ) ,
-              onTap: (){
-                if (item['title'] == 'Se déconnecter'){
-                  _showLogoutDialog(context);
-                }else if (item['title'] == 'Mes véhicules'){
-                  // navigation to my vehicles screen
-                }else if (item['title'] == 'Mes conducteurs'){
-                  // navigation to drivers screen
-                }else if (item['title'] == 'Centre d\'aide'){
-                  Get.to(() => const HelpCenterScreen());
-                }
-              },
-            ),
-          );
-
-        }).toList(),
-
-      ),
-    );
-  }
-  void _showLogoutDialog(BuildContext context){
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    Get.dialog(
-        AlertDialog(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.logout_rounded,
-                  color: Theme.of(context).primaryColor,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Voulez-vous vraiment vous déconnecter',
-                style: AppTextStyle.withColor(
-                  AppTextStyle.bodyMedium,
-                  isDark ? Colors.grey[400]! : Colors.grey[600]!,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Get.back(),
-                      style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: BorderSide(
-                            color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          )
-
-                      ),
-                      child: Text(
-                        'Annuler',
-                        style: AppTextStyle.withColor(
-                          AppTextStyle.buttonMedium,
-                          Theme.of(context).textTheme.bodyLarge!.color!,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final AuthController authController = Get.find<AuthController>();
-                        authController.logout();
-                        Get.offAll(()=> SigninScreen());
-                      },
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          )
-
-                      ),
-                      child: Text(
-                        'Se déconnecter',
-                        style: AppTextStyle.withColor(
-                          AppTextStyle.buttonMedium,
-                          Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              )
-
             ],
           ),
-        )
-    );
-  }
+          child: ListTile(
+            leading: Icon(
+              item['icon'] as IconData,
+              color: Theme.of(context).primaryColor,
+            ),
+            title: Text(
+              item['title'] as String,
+              style: AppTextStyle.withColor(
+                AppTextStyle.bodyMedium,
+                Theme.of(context).textTheme.bodyLarge!.color!,
+              ),
+            ),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ) ,
+            onTap: (){
+              if (item['title'] == 'Se déconnecter'){
+                _showLogoutDialog(context);
+              }else if (item['title'] == 'Véhicules'){
+                Get.to(() => VehiclesScreen());
+              }else if (item['title'] == 'Conducteurs'){
+                Get.to(() =>  DriversScreen());
+              }else if (item['title'] == 'Centre d\'aide'){
+                Get.to(() => const HelpCenterScreen());
+              }
+            },
+          ),
+        );
 
+      }).toList(),
 
+    ),
+  );
+}
+void _showLogoutDialog(BuildContext context){
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  Get.dialog(
+      AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
 
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.logout_rounded,
+                color: Theme.of(context).primaryColor,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Voulez-vous vraiment vous déconnecter',
+              style: AppTextStyle.withColor(
+                AppTextStyle.bodyMedium,
+                isDark ? Colors.grey[400]! : Colors.grey[600]!,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Get.back(),
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(
+                          color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        )
+
+                    ),
+                    child: Text(
+                      'Annuler',
+                      style: AppTextStyle.withColor(
+                        AppTextStyle.buttonMedium,
+                        Theme.of(context).textTheme.bodyLarge!.color!,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final AuthController authController = Get.find<AuthController>();
+                      authController.logout();
+                      Get.offAll(()=> SigninScreen());
+                    },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        )
+
+                    ),
+                    child: Text(
+                      'Se déconnecter',
+                      style: AppTextStyle.withColor(
+                        AppTextStyle.buttonMedium,
+                        Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+
+          ],
+        ),
+      )
+  );
 }
